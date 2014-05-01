@@ -65,6 +65,9 @@ extern NSString * const PBJVisionVideoThumbnailKey;
 
 // preview
 
+@property (nonatomic, readonly) AVCaptureSession *captureSession;
+@property (nonatomic, readonly) AVCaptureDevice *captureDevice;
+
 @property (nonatomic, readonly) AVCaptureVideoPreviewLayer *previewLayer;
 @property (nonatomic, readonly) CGRect cleanAperture;
 
@@ -72,6 +75,8 @@ extern NSString * const PBJVisionVideoThumbnailKey;
 - (void)stopPreview;
 
 - (void)unfreezePreview; // preview is automatically timed and frozen with photo capture
+
+- (void)configureWithHandler:(void (^)(AVCaptureSession *captureSession, AVCaptureDevice *camera))handler;
 
 // focus
 

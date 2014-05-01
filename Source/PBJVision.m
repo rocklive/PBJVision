@@ -148,6 +148,7 @@ enum
 @synthesize focusMode = _focusMode;
 @synthesize context = _context;
 @synthesize presentationFrame = _presentationFrame;
+@synthesize captureSession = _captureSession;
 
 #pragma mark - singleton
 
@@ -360,17 +361,17 @@ typedef void (^PBJVisionBlock)();
         error = nil;
     }
     
-    _captureDeviceAudio = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeAudio];
-    _captureDeviceInputAudio = [AVCaptureDeviceInput deviceInputWithDevice:_captureDeviceAudio error:&error];
-    if (error) {
-        DLog(@"error setting up audio input (%@)", error);
-    }
+//    _captureDeviceAudio = [AVCaptureDevice defaultDeviceWithMediaType:AVMediaTypeAudio];
+//    _captureDeviceInputAudio = [AVCaptureDeviceInput deviceInputWithDevice:_captureDeviceAudio error:&error];
+//    if (error) {
+//        DLog(@"error setting up audio input (%@)", error);
+//    }
     
     _captureOutputPhoto = [[AVCaptureStillImageOutput alloc] init];
-    _captureOutputAudio = [[AVCaptureAudioDataOutput alloc] init];
+//    _captureOutputAudio = [[AVCaptureAudioDataOutput alloc] init];
     _captureOutputVideo = [[AVCaptureVideoDataOutput alloc] init];
     
-    [_captureOutputAudio setSampleBufferDelegate:self queue:_captureVideoDispatchQueue];
+//    [_captureOutputAudio setSampleBufferDelegate:self queue:_captureVideoDispatchQueue];
     [_captureOutputVideo setSampleBufferDelegate:self queue:_captureVideoDispatchQueue];
     
     // add notification observers
@@ -511,8 +512,8 @@ typedef void (^PBJVisionBlock)();
     } // shouldSwitchDevice
     
     if (shouldSwitchMode) {
-        [_captureSession removeInput:_captureDeviceInputAudio];
-        [_captureSession removeOutput:_captureOutputAudio];
+//        [_captureSession removeInput:_captureDeviceInputAudio];
+//        [_captureSession removeOutput:_captureOutputAudio];
         [_captureSession removeOutput:_captureOutputVideo];
         [_captureSession removeOutput:_captureOutputPhoto];
         
@@ -520,13 +521,13 @@ typedef void (^PBJVisionBlock)();
             case PBJCameraModeVideo:
             {
                 // audio input
-                if ([_captureSession canAddInput:_captureDeviceInputAudio]) {
-                    [_captureSession addInput:_captureDeviceInputAudio];
-                }
+//                if ([_captureSession canAddInput:_captureDeviceInputAudio]) {
+//                    [_captureSession addInput:_captureDeviceInputAudio];
+//                }
                 // audio output
-                if ([_captureSession canAddOutput:_captureOutputAudio]) {
-                    [_captureSession addOutput:_captureOutputAudio];
-                }
+//                if ([_captureSession canAddOutput:_captureOutputAudio]) {
+//                    [_captureSession addOutput:_captureOutputAudio];
+//                }
                 // vidja output
                 if ([_captureSession canAddOutput:_captureOutputVideo]) {
                     [_captureSession addOutput:_captureOutputVideo];
@@ -642,7 +643,31 @@ typedef void (^PBJVisionBlock)();
     DLog(@"capture session setup");
 }
 
+- (AVCaptureSession *)captureSession {
+	return _captureSession;
+}
+
+- (AVCaptureDevice *)captureDevice {
+	return self.cameraDevice == PBJCameraDeviceFront && _captureDeviceFront ? _captureDeviceFront : _captureDeviceBack;
+}
+
 #pragma mark - preview
+
+- (void)configureWithHandler:(void (^)(AVCaptureSession *captureSession, AVCaptureDevice *camera))handler {
+	[self _enqueueBlockInCaptureSessionQueue:^{
+		if (!_captureSession) {
+			[self _setupCamera];
+			[self _setupSession];
+		}
+		AVCaptureSession *captureSession = [self captureSession];
+		AVCaptureDevice *captureDevice = [self captureDevice];
+		[captureSession beginConfiguration];
+		[captureDevice lockForConfiguration:nil];
+		handler(captureSession, captureDevice);
+		[captureDevice unlockForConfiguration];
+		[captureSession commitConfiguration];
+	}];
+}
 
 - (void)startPreview
 {
@@ -671,9 +696,10 @@ typedef void (^PBJVisionBlock)();
                 if ([_delegate respondsToSelector:@selector(visionSessionDidStart:)]) {
                     [_delegate visionSessionDidStart:self];
                 }
+                DLog(@"capture session running");
             }];
-            DLog(@"capture session running");
-        }
+        };
+
         _flags.previewRunning = YES;
     }];
 }
