@@ -652,9 +652,17 @@ typedef void (^PBJVisionBlock)();
             [self _setupSession];
         }
     
-        if (_previewLayer && _previewLayer.session != _captureSession) {
-            _previewLayer.session = _captureSession;
-        }
+        dispatch_group_t previewLayerGroup = dispatch_group_create();
+        
+        dispatch_group_enter(previewLayerGroup);
+        [self _enqueueBlockOnMainQueue:^{
+            if (_previewLayer && _previewLayer.session != _captureSession) {
+                _previewLayer.session = _captureSession;
+            }
+            dispatch_group_leave(previewLayerGroup);
+        }];
+        
+        dispatch_group_wait(previewLayerGroup, DISPATCH_TIME_FOREVER);
         
         if (![_captureSession isRunning]) {
             [_captureSession startRunning];
