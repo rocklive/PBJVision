@@ -1162,7 +1162,7 @@ typedef void (^PBJVisionBlock)();
 #pragma mark - preview
 
 - (void)configureWithHandler:(void (^)(AVCaptureSession *captureSession, AVCaptureDevice *camera))handler {
-	[self _enqueueBlockInCaptureSessionQueue:^{
+	[self _enqueueBlockOnCaptureSessionQueue:^{
 		if (!_captureSession) {
 			[self _setupCamera];
 			[self _setupSession];
