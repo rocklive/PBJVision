@@ -201,6 +201,7 @@ typedef NS_ENUM(GLint, PBJVisionUniformLocationTypes)
 @synthesize videoBitRate = _videoBitRate;
 @synthesize additionalCompressionProperties = _additionalCompressionProperties;
 @synthesize maximumCaptureDuration = _maximumCaptureDuration;
+@synthesize captureSession = _captureSession;
 
 #pragma mark - singleton
 
@@ -1002,13 +1003,13 @@ typedef void (^PBJVisionBlock)();
             case PBJCameraModeVideo:
             {
                 // audio input
-                if ([_captureSession canAddInput:_captureDeviceInputAudio]) {
-                    [_captureSession addInput:_captureDeviceInputAudio];
-                }
+//                if ([_captureSession canAddInput:_captureDeviceInputAudio]) {
+//                    [_captureSession addInput:_captureDeviceInputAudio];
+//                }
                 // audio output
-                if ([_captureSession canAddOutput:_captureOutputAudio]) {
-                    [_captureSession addOutput:_captureOutputAudio];
-                }
+//                if ([_captureSession canAddOutput:_captureOutputAudio]) {
+//                    [_captureSession addOutput:_captureOutputAudio];
+//                }
                 // vidja output
                 if ([_captureSession canAddOutput:_captureOutputVideo]) {
                     [_captureSession addOutput:_captureOutputVideo];
@@ -1150,7 +1151,31 @@ typedef void (^PBJVisionBlock)();
     DLog(@"capture session setup");
 }
 
+- (AVCaptureSession *)captureSession {
+	return _captureSession;
+}
+
+- (AVCaptureDevice *)captureDevice {
+	return self.cameraDevice == PBJCameraDeviceFront && _captureDeviceFront ? _captureDeviceFront : _captureDeviceBack;
+}
+
 #pragma mark - preview
+
+- (void)configureWithHandler:(void (^)(AVCaptureSession *captureSession, AVCaptureDevice *camera))handler {
+	[self _enqueueBlockInCaptureSessionQueue:^{
+		if (!_captureSession) {
+			[self _setupCamera];
+			[self _setupSession];
+		}
+		AVCaptureSession *captureSession = [self captureSession];
+		AVCaptureDevice *captureDevice = [self captureDevice];
+		[captureSession beginConfiguration];
+		[captureDevice lockForConfiguration:nil];
+		handler(captureSession, captureDevice);
+		[captureDevice unlockForConfiguration];
+		[captureSession commitConfiguration];
+	}];
+}
 
 - (void)startPreview
 {
@@ -1160,10 +1185,22 @@ typedef void (^PBJVisionBlock)();
             [self _setupSession];
         }
     
+        dispatch_group_t previewLayerGroup = dispatch_group_create();
+
         if (_previewLayer && _previewLayer.session != _captureSession) {
             _previewLayer.session = _captureSession;
             [self _setOrientationForConnection:_previewLayer.connection];
         }
+        
+        dispatch_group_enter(previewLayerGroup);
+        [self _enqueueBlockOnMainQueue:^{
+            if (_previewLayer && _previewLayer.session != _captureSession) {
+                _previewLayer.session = _captureSession;
+            }
+            dispatch_group_leave(previewLayerGroup);
+        }];
+        
+        dispatch_group_wait(previewLayerGroup, DISPATCH_TIME_FOREVER);
         
         if (![_captureSession isRunning]) {
             [_captureSession startRunning];
@@ -1172,9 +1209,10 @@ typedef void (^PBJVisionBlock)();
                 if ([_delegate respondsToSelector:@selector(visionSessionDidStartPreview:)]) {
                     [_delegate visionSessionDidStartPreview:self];
                 }
+                DLog(@"capture session running");
             }];
-            DLog(@"capture session running");
-        }
+        };
+
         _flags.previewRunning = YES;
     }];
 }
