@@ -1165,12 +1165,16 @@ typedef void (^PBJVisionBlock)();
 
 - (void)configureWithHandler:(void (^)(AVCaptureSession *captureSession, AVCaptureDevice *camera))handler {
 	[self _enqueueBlockOnCaptureSessionQueue:^{
-		if (!_captureSession) {
+		if (!_captureSession || !_captureDeviceInputFront || !_captureDeviceInputBack) {
+			[self _destroyCamera];
 			[self _setupCamera];
 			[self _setupSession];
 		}
 		AVCaptureSession *captureSession = [self captureSession];
 		AVCaptureDevice *captureDevice = [self captureDevice];
+		if (!((captureDevice == _captureDeviceFront && _captureDeviceInputFront != nil) || (captureDevice == _captureDeviceBack && _captureDeviceInputBack != nil))) {
+			captureDevice = nil;
+		}
 		[captureSession beginConfiguration];
 		[captureDevice lockForConfiguration:nil];
 		handler(captureSession, captureDevice);
