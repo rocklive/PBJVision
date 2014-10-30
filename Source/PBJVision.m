@@ -946,6 +946,10 @@ typedef void (^PBJVisionBlock)();
             if (_captureDeviceInputBack)
                 [_captureSession removeInput:_captureDeviceInputBack];
             
+            if (_captureDeviceFront && ![_captureDeviceFront supportsAVCaptureSessionPreset:_captureSession.sessionPreset]) {
+                _captureSession.sessionPreset = AVCaptureSessionPresetPhoto;
+            }
+
             if (_captureDeviceInputFront && [_captureSession canAddInput:_captureDeviceInputFront]) {
                 [_captureSession addInput:_captureDeviceInputFront];
                 newDeviceInput = _captureDeviceInputFront;
@@ -958,6 +962,10 @@ typedef void (^PBJVisionBlock)();
             if (_captureDeviceInputFront)
                 [_captureSession removeInput:_captureDeviceInputFront];
             
+            if (_captureDeviceBack && ![_captureDeviceBack supportsAVCaptureSessionPreset:_captureSession.sessionPreset]) {
+                _captureSession.sessionPreset = AVCaptureSessionPresetPhoto;
+            }
+
             if (_captureDeviceInputBack && [_captureSession canAddInput:_captureDeviceInputBack]) {
                 [_captureSession addInput:_captureDeviceInputBack];
                 newDeviceInput = _captureDeviceInputBack;
@@ -1107,7 +1115,7 @@ typedef void (^PBJVisionBlock)();
     } else if ( newCaptureOutput && (newCaptureOutput == _captureOutputPhoto) ) {
     
         // specify photo preset
-        sessionPreset = AVCaptureSessionPresetPhoto;
+        sessionPreset = self.captureSessionPreset ?: AVCaptureSessionPresetPhoto;
     
         // setup photo settings
         NSDictionary *photoSettings = @{AVVideoCodecKey : AVVideoCodecJPEG};
