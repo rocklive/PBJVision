@@ -108,6 +108,7 @@ typedef NS_ENUM(GLint, PBJVisionUniformLocationTypes)
 
     dispatch_queue_t _captureSessionDispatchQueue;
     dispatch_queue_t _captureVideoDispatchQueue;
+    dispatch_queue_t _serialDispatchQueue;
 
     PBJCameraDevice _cameraDevice;
     PBJCameraMode _cameraMode;
@@ -695,6 +696,7 @@ typedef NS_ENUM(GLint, PBJVisionUniformLocationTypes)
         // setup queues
         _captureSessionDispatchQueue = dispatch_queue_create("PBJVisionSession", DISPATCH_QUEUE_SERIAL); // protects session
         _captureVideoDispatchQueue = dispatch_queue_create("PBJVisionVideo", DISPATCH_QUEUE_SERIAL); // protects capture
+        _serialDispatchQueue = dispatch_queue_create("PBJVisionSerialQueue", DISPATCH_QUEUE_SERIAL); // protects current device kvo
         
         _previewLayer = [[AVCaptureVideoPreviewLayer alloc] initWithSession:nil];
         
@@ -835,14 +837,16 @@ typedef void (^PBJVisionBlock)();
     [notificationCenter addObserver:self selector:@selector(_deviceSubjectAreaDidChange:) name:AVCaptureDeviceSubjectAreaDidChangeNotification object:nil];
 
     // current device KVO notifications
-    [self addObserver:self forKeyPath:@"currentDevice.adjustingFocus" options:NSKeyValueObservingOptionNew context:(__bridge void *)PBJVisionFocusObserverContext];
-    [self addObserver:self forKeyPath:@"currentDevice.adjustingExposure" options:NSKeyValueObservingOptionNew context:(__bridge void *)PBJVisionExposureObserverContext];
-    [self addObserver:self forKeyPath:@"currentDevice.adjustingWhiteBalance" options:NSKeyValueObservingOptionNew context:(__bridge void *)PBJVisionWhiteBalanceObserverContext];
-    [self addObserver:self forKeyPath:@"currentDevice.flashMode" options:NSKeyValueObservingOptionNew context:(__bridge void *)PBJVisionFlashModeObserverContext];
-    [self addObserver:self forKeyPath:@"currentDevice.torchMode" options:NSKeyValueObservingOptionNew context:(__bridge void *)PBJVisionTorchModeObserverContext];
-    [self addObserver:self forKeyPath:@"currentDevice.flashAvailable" options:NSKeyValueObservingOptionNew context:(__bridge void *)PBJVisionFlashAvailabilityObserverContext];
-    [self addObserver:self forKeyPath:@"currentDevice.torchAvailable" options:NSKeyValueObservingOptionNew context:(__bridge void *)PBJVisionTorchAvailabilityObserverContext];
-
+    dispatch_sync(_serialDispatchQueue, ^{
+        [self addObserver:self forKeyPath:@"currentDevice.adjustingFocus" options:NSKeyValueObservingOptionNew context:(__bridge void *)PBJVisionFocusObserverContext];
+        [self addObserver:self forKeyPath:@"currentDevice.adjustingExposure" options:NSKeyValueObservingOptionNew context:(__bridge void *)PBJVisionExposureObserverContext];
+        [self addObserver:self forKeyPath:@"currentDevice.adjustingWhiteBalance" options:NSKeyValueObservingOptionNew context:(__bridge void *)PBJVisionWhiteBalanceObserverContext];
+        [self addObserver:self forKeyPath:@"currentDevice.flashMode" options:NSKeyValueObservingOptionNew context:(__bridge void *)PBJVisionFlashModeObserverContext];
+        [self addObserver:self forKeyPath:@"currentDevice.torchMode" options:NSKeyValueObservingOptionNew context:(__bridge void *)PBJVisionTorchModeObserverContext];
+        [self addObserver:self forKeyPath:@"currentDevice.flashAvailable" options:NSKeyValueObservingOptionNew context:(__bridge void *)PBJVisionFlashAvailabilityObserverContext];
+        [self addObserver:self forKeyPath:@"currentDevice.torchAvailable" options:NSKeyValueObservingOptionNew context:(__bridge void *)PBJVisionTorchAvailabilityObserverContext];
+    });
+    
     // KVO is only used to monitor focus and capture events
     [_captureOutputPhoto addObserver:self forKeyPath:@"capturingStillImage" options:NSKeyValueObservingOptionNew context:(__bridge void *)(PBJVisionCaptureStillImageIsCapturingStillImageObserverContext)];
     
@@ -856,13 +860,15 @@ typedef void (^PBJVisionBlock)();
         return;
     
     // current device KVO notifications
-    [self removeObserver:self forKeyPath:@"currentDevice.adjustingFocus"];
-    [self removeObserver:self forKeyPath:@"currentDevice.adjustingExposure"];
-    [self removeObserver:self forKeyPath:@"currentDevice.adjustingWhiteBalance"];
-    [self removeObserver:self forKeyPath:@"currentDevice.flashMode"];
-    [self removeObserver:self forKeyPath:@"currentDevice.torchMode"];
-    [self removeObserver:self forKeyPath:@"currentDevice.flashAvailable"];
-    [self removeObserver:self forKeyPath:@"currentDevice.torchAvailable"];
+    dispatch_sync(_serialDispatchQueue, ^{
+        [self removeObserver:self forKeyPath:@"currentDevice.adjustingFocus"];
+        [self removeObserver:self forKeyPath:@"currentDevice.adjustingExposure"];
+        [self removeObserver:self forKeyPath:@"currentDevice.adjustingWhiteBalance"];
+        [self removeObserver:self forKeyPath:@"currentDevice.flashMode"];
+        [self removeObserver:self forKeyPath:@"currentDevice.torchMode"];
+        [self removeObserver:self forKeyPath:@"currentDevice.flashAvailable"];
+        [self removeObserver:self forKeyPath:@"currentDevice.torchAvailable"];
+    });
 	
 	[_captureOutputPhoto removeObserver:self forKeyPath:@"capturingStillImage" context:(__bridge void *)(PBJVisionCaptureStillImageIsCapturingStillImageObserverContext)];
 
@@ -951,7 +957,9 @@ typedef void (^PBJVisionBlock)();
             }
 
             if (_captureDeviceInputFront && [_captureSession canAddInput:_captureDeviceInputFront]) {
-                [_captureSession addInput:_captureDeviceInputFront];
+                dispatch_sync(_serialDispatchQueue, ^{
+                    [_captureSession addInput:_captureDeviceInputFront];
+                });
                 newDeviceInput = _captureDeviceInputFront;
                 newCaptureDevice = _captureDeviceFront;
             }
@@ -967,7 +975,9 @@ typedef void (^PBJVisionBlock)();
             }
 
             if (_captureDeviceInputBack && [_captureSession canAddInput:_captureDeviceInputBack]) {
-                [_captureSession addInput:_captureDeviceInputBack];
+                dispatch_sync(_serialDispatchQueue, ^{
+                    [_captureSession addInput:_captureDeviceInputBack];
+                });
                 newDeviceInput = _captureDeviceInputBack;
                 newCaptureDevice = _captureDeviceBack;
             }
@@ -1147,14 +1157,16 @@ typedef void (^PBJVisionBlock)();
         _currentOutput = newCaptureOutput;
 
     // ensure there is a capture device setup
-    if (_currentInput) {
-        AVCaptureDevice *device = [_currentInput device];
-        if (device) {
-            [self willChangeValueForKey:@"currentDevice"];
-            _currentDevice = device;
-            [self didChangeValueForKey:@"currentDevice"];
+    dispatch_sync(_serialDispatchQueue, ^{
+        if (_currentInput) {
+            AVCaptureDevice *device = [_currentInput device];
+            if (device) {
+                [self willChangeValueForKey:@"currentDevice"];
+                _currentDevice = device;
+                [self didChangeValueForKey:@"currentDevice"];
+            }
         }
-    }
+    });
 
     [_captureSession commitConfiguration];
     
@@ -2234,7 +2246,7 @@ typedef void (^PBJVisionBlock)();
 
 - (void)_sessionStarted:(NSNotification *)notification
 {
-    [self _enqueueBlockOnMainQueue:^{
+   dispatch_async(_serialDispatchQueue, ^{
         if ([notification object] != _captureSession)
             return;
 
@@ -2249,11 +2261,12 @@ typedef void (^PBJVisionBlock)();
                 [self didChangeValueForKey:@"currentDevice"];
             }
         }
-    
-        if ([_delegate respondsToSelector:@selector(visionSessionDidStart:)]) {
-            [_delegate visionSessionDidStart:self];
-        }
-    }];
+       [self _enqueueBlockOnMainQueue:^{
+            if ([_delegate respondsToSelector:@selector(visionSessionDidStart:)]) {
+                [_delegate visionSessionDidStart:self];
+            }
+        }];
+    });
 }
 
 - (void)_sessionStopped:(NSNotification *)notification
