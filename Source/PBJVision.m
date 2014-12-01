@@ -1215,7 +1215,9 @@ typedef void (^PBJVisionBlock)();
 
         if (_previewLayer && _previewLayer.session != _captureSession) {
             _previewLayer.session = _captureSession;
-            [self _setOrientationForConnection:_previewLayer.connection];
+            if (self.autoUpdatePreviewOrientation) {
+                [self _setOrientationForConnection:_previewLayer.connection];
+            };
         }
         
         dispatch_group_enter(previewLayerGroup);
